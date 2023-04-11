@@ -1,5 +1,5 @@
 import random
-# -- import maestro
+import maestro
 import math
 import pyrealsense2 as rs
 import numpy as np
@@ -11,10 +11,9 @@ import sys
 pipeline = rs.pipeline()
 config = rs.config()
 
-# -- controller = maestro.Controller()
-# -- controller.setTarget(1, 6000)
-# -- time.sleep(0.1)
-# -- controller.setTarget(1, 6000)
+controller = maestro.Controller()
+controller.setTarget(1, 6000)
+time.sleep(0.1)
 
 # Get device product line for setting a supporting resolution
 pipeline_wrapper = rs.pipeline_wrapper(pipeline)
@@ -89,11 +88,16 @@ try:
 
         height, width, = img.shape
         x_vals, y_vals = np.where(img == 255)
+
+        # if cog is off-screen, stop moving and wait
         try:
             cog = [int(float(sum(y_vals)) / len(y_vals)), int(float(sum(x_vals)) / len(x_vals))]
         except ZeroDivisionError:
             cog = current_cog
+            controller.setTarget(1, 6000)
+            time.sleep(0.01)
 
+        # reduce cog jittering
         if cog[0] - current_cog[0] > 40:
             cog[0] = current_cog[0] + 40
         elif cog[0] - current_cog[0] < -40:
@@ -103,31 +107,36 @@ try:
         elif cog[1] - current_cog[1] < -40:
             cog[1] = current_cog[1] - 40
         current_cog = cog
+
         cv.circle(img, cog, 20, (255, 0, 0), 20)
 
         # cog is too far left
         if cog[0] > width * 0.66:
             print('turning right!')
-
+            controller.setTarget(2, 5400)
             time.sleep(0.01)
 
         # cog is too far right
         elif cog[0] < width * 0.33:
             print('turning left!')
+            controller.setTarget(2, 6400)
             time.sleep(0.01)
 
         # cog is too far up (move forward)
         elif cog[1] < height * 0.5:
             print('VROOOOM')
+            controller.setTarget(1, 5400)
             time.sleep(0.01)
 
         # lost cog (stop)
         elif cog[1] > height * 0.5:
             print('Help me! STOP!')
+            controller.setTarget(1, 6000)
             time.sleep(0.01)
 
         else:
             print('STOP!')
+            controller.setTarget(1, 6000)
             time.sleep(0.01)
 
 
@@ -137,7 +146,7 @@ try:
         k = cv.waitKey(5) & 0xFF
         if k == 27:
             print("Stopping")
-            # -- controller.setTarget(1,6000)
+            controller.setTarget(1,6000)
             break
 
 
@@ -145,6 +154,6 @@ finally:
 
     # Stop streaming
     pipeline.stop()
-    # -- controller.setTarget(1, 6000)
+    controller.setTarget(1, 6000)
 
 cv.destroyAllWindows()
