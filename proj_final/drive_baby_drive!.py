@@ -56,6 +56,7 @@ class Robo:
         #  clipping_distance_in_meters meters away
         self.clipping_distance_in_meters = set_depth_scale  # 2 meter
         self.clipping_distance = self.clipping_distance_in_meters / depth_scale
+        self.repeat = False
 
     def robo_move(self, dir='stop', speed=6000):
         if dir == "stop":
@@ -95,7 +96,7 @@ class Robo:
 
             # Convert images to numpy arrays
             depth_image = np.asanyarray(depth_frame.get_data())
-            #depth_colormap_image = cv.applyColorMap(cv.convertScaleAbs(depth_image, alpha=0.03), cv.COLORMAP_JET)
+            # depth_colormap_image = cv.applyColorMap(cv.convertScaleAbs(depth_image, alpha=0.03), cv.COLORMAP_JET)
             color_image = np.asanyarray(color_frame.get_data())
             return color_image, depth_image
 
@@ -118,7 +119,6 @@ class Robo:
 
             frame1 = np.asanyarray(color_init.get_data())
 
-
             # opencv tracker
             self.tracker = cv.TrackerKCF_create()
             # select custom bbox that opencv will track
@@ -128,44 +128,92 @@ class Robo:
 
         self.current_cog = [300, 300]
         self.x = 0
-        self.repeat = False
+
+    # used to grab number of pixels from a frame. used currently in the locate function.
+    def get_color(self, frame, color):
+        if color == 'red':
+            hsv_low_range_1 = (0, 50, 20)
+            hsv_high_range_1 = (15, 255, 255)
+            hsv_low_range_2 = (170, 50, 20)
+            hsv_high_range_2 = (180, 255, 255)
+        elif color == 'green':
+            hsv_low_range_1 = (45, 80, 20)
+            hsv_high_range_1 = (70, 255, 255)
+
+        elif color == 'blue':
+            hsv_low_range_1 = (110, 80, 20)
+            hsv_high_range_1 = (135, 255, 255)
+
+        else:
+            raise SystemError("You must choose from red green or blue!")
+        color_check_frame = cv.blur(frame, (60, 60))
+        color_check_frame = cv.cvtColor(color_check_frame, cv.COLOR_BGR2HSV)
+
+        # check for red
+        mask1 = cv.inRange(color_check_frame, hsv_low_range_1, hsv_high_range_1)
+        if color == 'red':
+            mask2 = cv.inRange(color_check_frame, hsv_low_range_2, hsv_high_range_2)
+
+        # Merge the mask and crop the red regions
+        if color == 'red':
+            mask = cv.bitwise_or(mask1, mask2)
+        else:
+            mask = mask1
+        cropped = cv.bitwise_and(color_check_frame, color_check_frame, mask=mask)
+        h, s, v1 = cv.split(cropped)
+        v1 = cv.threshold(v1, 1, 255, cv.THRESH_BINARY)[1]
+        count, counts = np.unique(v1, return_counts=True)
+        # return number of pixels that are in range of specified color (NOTE: WORKS IN BRIGHT ENVIRONMENTS)
+        try:
+            return v1, dict(zip(count, counts))[255]
+        except KeyError:
+            return v1, 0
+
     def locate(self, iteration):
         if iteration == 1:
             while True:
                 color_frame, depth_frame = self.grab_frame()
 
                 # remove depth background
-                depth_image_3d = np.dstack((depth_frame , depth_frame , depth_frame ))  # depth image is 1 channel, color is 3 channels
-                depth_frame = np.where((depth_image_3d > self.clipping_distance) | (depth_image_3d <= 0), 255 ,color_frame)
+                depth_image_3d = np.dstack(
+                    (depth_frame, depth_frame, depth_frame))  # depth image is 1 channel, color is 3 channels
+                depth_frame = np.where((depth_image_3d > self.clipping_distance) | (depth_image_3d <= 0), 255,
+                                       color_frame)
 
-                color_check_frame = cv.blur(depth_frame, (60, 60))
-                color_check_frame = cv.cvtColor(color_check_frame, cv.COLOR_BGR2HSV)
-                #color_check_frame = cv.threshold(color_check_frame, 100, 255, cv.THRESH_BINARY)[1]
+                red_frame, red = self.get_color(depth_frame, 'red')
+                blue_frame, blue = self.get_color(depth_frame, 'blue')
+                green_frame, green = self.get_color(depth_frame, 'green')
 
-                # check for red
-                mask1 = cv.inRange(color_check_frame, (0, 50, 20), (15, 255, 255))
-                mask2 = cv.inRange(color_check_frame, (170, 50, 20), (180, 255, 255))
+                if red > 1200:
+                    if self.repeat:
+                        print('RED FOUND')
+                        self.repeat = False
+                    else:
+                        print('RED FOUND!')
+                        self.repeat = True
 
-                ## Merge the mask and crop the red regions
-                mask = cv.bitwise_or(mask1, mask2)
-                cropped = cv.bitwise_and(color_check_frame, color_check_frame, mask=mask)
-                h, s , v1 = cv.split(cropped)
-                v1 = cv.threshold(v1, 1, 255, cv.THRESH_BINARY)[1]
-                count, counts = np.unique(v1, return_counts=True)
-                try:
-                    if dict(zip(count, counts))[255] > 750:
-                        if self.repeat:
-                            print('RED FOUND')
-                            self.repeat = False
-                        else:
-                            print('RED FOUND!')
-                            self.repeat = True
-                except KeyError:
-                    pass
+                if blue > 1200:
+                    if self.repeat:
+                        print('BLUE FOUND')
+                        self.repeat = False
+                    else:
+                        print('BLUE FOUND!')
+                        self.repeat = True
+
+                if green > 1200:
+                    if self.repeat:
+                        print('GREEN FOUND')
+                        self.repeat = False
+                    else:
+                        print('GREEN FOUND!')
+                        self.repeat = True
 
                 self.robo_move('left')
-                cv.imshow('1', color_check_frame)
-                cv.imshow('2', v1)
+                cv.imshow('red', red_frame)
+                cv.imshow('blue', blue_frame)
+                cv.imshow('green', green_frame)
+
+                time.sleep(0.3)
 
                 if self.check_end():
                     break
@@ -192,15 +240,13 @@ class Robo:
         self.locate(2)
         self.avoid_rocks()
         self.touch_goal()
-        #self.testing()
+        # self.testing()
 
     def testing(self):
         try:
             while True:
 
                 color_image, depth_colormap_image = self.grab_frame()
-
-
 
                 img = cv.cvtColor(color_image, cv.COLOR_BGR2GRAY)
                 img = cv.blur(img, (100, 100))
