@@ -169,54 +169,69 @@ class Robo:
         except KeyError:
             return v1, 0
 
-    def locate(self, iteration):
-        if iteration == 1:
-            while True:
-                color_frame, depth_frame = self.grab_frame()
+    def find_line(self):
+        while True:
+            if self.see_color() is None:
+                self.robo_move('forward')
+                print('VROOM')
+            else:
+                break
 
-                # remove depth background
-                depth_image_3d = np.dstack(
-                    (depth_frame, depth_frame, depth_frame))  # depth image is 1 channel, color is 3 channels
-                depth_frame = np.where((depth_image_3d > self.clipping_distance) | (depth_image_3d <= 0), 255,
-                                       color_frame)
+    def find_target(self):
+        pass
 
-                red_frame, red = self.get_color(depth_frame, 'red')
-                blue_frame, blue = self.get_color(depth_frame, 'blue')
-                green_frame, green = self.get_color(depth_frame, 'green')
+    def see_color(self, image=None):
+        if image is None:
+            image, frame = self.grab_frame()
+        # Convert Image to Image HSV
+        hsv = cv.cvtColor(image, cv.COLOR_BGR2HSV)
 
-                if red > 1200:
-                    if self.repeat:
-                        print('RED FOUND')
-                        self.repeat = False
-                    else:
-                        print('RED FOUND!')
-                        self.repeat = True
+        yellow_upper = 55
+        yellow_lower = 20
+        blue_upper = 100
+        blue_lower = 60
+        red_upper = 200
+        red_lower = 125
 
-                if blue > 1200:
-                    if self.repeat:
-                        print('BLUE FOUND')
-                        self.repeat = False
-                    else:
-                        print('BLUE FOUND!')
-                        self.repeat = True
+        color_list = [(yellow_lower, yellow_upper), (blue_lower, blue_upper), (red_lower, red_upper)]
 
-                if green > 1200:
-                    if self.repeat:
-                        print('GREEN FOUND')
-                        self.repeat = False
-                    else:
-                        print('GREEN FOUND!')
-                        self.repeat = True
+        for i in range(3):
+            # Defining lower and upper bound HSV values
+            lower = np.array([color_list[i][0], 100, 100])
+            upper = np.array([color_list[i][1], 255, 255])
 
-                self.robo_move('left')
-                cv.imshow('red', red_frame)
-                cv.imshow('blue', blue_frame)
-                cv.imshow('green', green_frame)
+            # Defining mask for detecting color
+            mask = cv.inRange(hsv, lower, upper)
+            cv.imshow("mask", mask)
+            time.sleep(2)
+            time.sleep(.1)
+            x_vals, y_vals = np.where(mask == 255)
+            pixels = len(x_vals)
+            if pixels > 1500:
+                print('Greater than 1500')
+                while pixels > 1500:
+                    self.robo_move('forward')
+                    time.sleep(1)
+                    self.robo_move()
 
-                time.sleep(0.3)
+                if i == 0:
+                    print('yellow')
+                if i == 1:
+                    print('blue')
+                if i == 2:
+                    print('red')
+                return lower, upper
+            else:
+                print("Not greater than 1500")
+            time.sleep(1)
 
-                if self.check_end():
-                    break
+
+
+        # Display Image and Mask
+        # cv.imshow("Image", image)
+        # cv.imshow("Mask", mask)
+        if self.check_end():
+            print("Done")
 
     def turn_around(self):
         for i in range(10):
@@ -226,21 +241,29 @@ class Robo:
         pass
 
     def find_person(self):
-        pass
+        while True:
+            if self.see_color() is None:
+                self.robo_move('left')
+                print('Turning left')
+            else:
+                break
 
     def touch_goal(self):
         pass
 
     def run(self):
-        self.first_frame()
-        self.locate(1)
-        self.turn_around()
-        self.avoid_rocks()
-        self.find_person()
-        self.locate(2)
-        self.avoid_rocks()
-        self.touch_goal()
-        # self.testing()
+        #self.first_frame()
+        self.see_color()
+        #self.find_person()
+        # self.locate(1)
+
+    # self.turn_around()
+    # self.avoid_rocks()
+    # self.find_person()
+    # self.locate(2)
+    # self.avoid_rocks()
+    # self.touch_goal()
+    # self.testing()
 
     def testing(self):
         try:
@@ -252,21 +275,21 @@ class Robo:
                 img = cv.blur(img, (100, 100))
                 img = cv.threshold(img, 130, 255, cv.THRESH_BINARY)
                 img = img[1]
-                mg = cv.blur(img, (30, 30))
+                img = cv.blur(img, (30, 30))
                 img = cv.threshold(img, 100, 255, cv.THRESH_BINARY)
                 img = img[1]
-                '''img = cv.equalizeHist(img[1])
-                img = cv.blur(img, (9,9))
+                img = cv.equalizeHist(img[1])
+                img = cv.blur(img, (9, 9))
                 img_x = cv.Sobel(img, 2, 1, 0);
                 img_y = cv.Sobel(img, 2, 0, 1);
                 abs_grad_x = cv.convertScaleAbs(img_x);
                 abs_grad_y = cv.convertScaleAbs(img_y);
                 img = cv.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0);
-        
+
                 img = cv.threshold(img, 40, 255, cv.THRESH_BINARY)
                 img = cv.blur(img[1], (9, 9))
                 img = cv.threshold(img, 100, 255, cv.THRESH_BINARY)
-                img = img[1]'''
+                img = img[1]
 
                 height, width, = img.shape
                 x_vals, y_vals = np.where(img == 255)
@@ -303,43 +326,43 @@ class Robo:
                     x=0'''
                 # print(cog[1],height)
                 # cog is too far left
-                '''if cog[0] > width * 0.75:
+                if cog[0] > width * 0.75:
                     print('turning right!')
-                    controller.setTarget(1, 6000)
+                    self.controller.setTarget(1, 6000)
                     time.sleep(0.01)
-                    controller.setTarget(2, 5100)
+                    self.controller.setTarget(2, 5100)
                     time.sleep(0.6)
-        
+
                 # cog is too far right
                 elif cog[0] < width * 0.25:
                     print('turning left!')
-                    controller.setTarget(1, 6000)
+                    self.controller.setTarget(1, 6000)
                     time.sleep(0.01)
-                    controller.setTarget(2, 6900)
+                    self.controller.setTarget(2, 6900)
                     time.sleep(0.6)
-        
+
                 # cog is too far up (move forward)
                 elif cog[1] < height * 0.85:
                     print('VROOOOM')
-                    controller.setTarget(2, 6000)
+                    self.controller.setTarget(2, 6000)
                     time.sleep(0.01)
-                    controller.setTarget(1, 5300)
+                    self.controller.setTarget(1, 5300)
                     time.sleep(0.7)
-        
+
                 # lost cog (stop)
                 elif cog[1] > height * 0.66:
                     print('Help me! STOP!')
-                    controller.setTarget(1, 6000)
+                    self.controller.setTarget(1, 6000)
                     time.sleep(0.01)
-                    controller.setTarget(2, 6000)
+                    self.controller.setTarget(2, 6000)
                     time.sleep(0.01)
                 else:
                     print('STOP!')
-                    controller.setTarget(1, 6000)
+                    self.controller.setTarget(1, 6000)
                     time.sleep(0.01)
-                    controller.setTarget(2, 6000)
+                    self.controller.setTarget(2, 6000)
                     time.sleep(0.01)
-        '''
+
                 cv.imshow('Depth', depth_colormap_image)
                 cv.imshow('RealSense', img)
                 self.robo_move('stop')
