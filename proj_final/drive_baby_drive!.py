@@ -184,6 +184,8 @@ class Robo:
         if image is None:
             image, frame = self.grab_frame()
         # Convert Image to Image HSV
+        time.sleep(.5)
+
         hsv = cv.cvtColor(image, cv.COLOR_BGR2HSV)
 
         yellow_upper = 55
@@ -194,36 +196,29 @@ class Robo:
         red_lower = 125
 
         color_list = [(yellow_lower, yellow_upper), (blue_lower, blue_upper), (red_lower, red_upper)]
+        while True:
+            for i in range(3):
+                # Defining lower and upper bound HSV values
+                lower = np.array([color_list[i][0], 100, 100])
+                upper = np.array([color_list[i][1], 255, 255])
 
-        for i in range(3):
-            # Defining lower and upper bound HSV values
-            lower = np.array([color_list[i][0], 100, 100])
-            upper = np.array([color_list[i][1], 255, 255])
-
-            # Defining mask for detecting color
-            mask = cv.inRange(hsv, lower, upper)
-            cv.imshow("mask", mask)
-            time.sleep(2)
-            time.sleep(.1)
-            x_vals, y_vals = np.where(mask == 255)
-            pixels = len(x_vals)
-            if pixels > 1500:
-                print('Greater than 1500')
-                while pixels > 1500:
-                    self.robo_move('forward')
-                    time.sleep(1)
-                    self.robo_move()
-
-                if i == 0:
-                    print('yellow')
-                if i == 1:
-                    print('blue')
-                if i == 2:
-                    print('red')
-                return lower, upper
-            else:
-                print("Not greater than 1500")
-            time.sleep(1)
+                # Defining mask for detecting color
+                mask = cv.inRange(hsv, lower, upper)
+                cv.imshow("mask", mask)
+                x_vals, y_vals = np.where(mask == 255)
+                pixels = len(x_vals)
+                if pixels > 1500:
+                    print('Greater than 1500')
+                    if i == 0:
+                        print('yellow')
+                    if i == 1:
+                        print('blue')
+                    if i == 2:
+                        print('red')
+                    return lower, upper
+                else:
+                    print("Not greater than 1500")
+                time.sleep(1)
 
 
 
@@ -234,8 +229,9 @@ class Robo:
             print("Done")
 
     def turn_around(self):
-        for i in range(10):
-            self.robo_move('left')
+        self.robo_move('left')
+        time.sleep(5)
+        self.robo_move()
 
     def avoid_rocks(self):
         pass
@@ -249,11 +245,22 @@ class Robo:
                 break
 
     def touch_goal(self):
-        pass
+        robo.robo_move("forward")
+        time.sleep(8)
+        robo.robo_move()
+        time.sleep(2)
+        self.first_frame()
+        self.see_color()
+        time.sleep(.5)
+        robo.turn_around()
+        robo.robo_move("forward")
+        time.sleep(12)
+        robo.robo_move()
+
 
     def run(self):
         #self.first_frame()
-        self.see_color()
+        self.touch_goal()
         #self.find_person()
         # self.locate(1)
 
